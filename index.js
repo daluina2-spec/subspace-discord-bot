@@ -101,19 +101,19 @@ const commands = [
   new SlashCommandBuilder().setName("ping").setDescription("Health check"),
 
   new SlashCommandBuilder()
-    .setName("ban")
+    .setName("gban")
     .setDescription("Ban global (via Roblox DataStore) por UserId")
     .addIntegerOption(opt => opt.setName("userid").setDescription("UserId").setRequired(true))
     .addStringOption(opt => opt.setName("reason").setDescription("Razón").setRequired(false)),
 
   new SlashCommandBuilder()
-    .setName("unban")
+    .setName("gunban")
     .setDescription("Quitar ban global por UserId")
     .addIntegerOption(opt => opt.setName("userid").setDescription("UserId").setRequired(true))
     .addStringOption(opt => opt.setName("reason").setDescription("Razón").setRequired(false)),
 
   new SlashCommandBuilder()
-    .setName("kick")
+    .setName("gkick")
     .setDescription("Kick en vivo (si el jugador está en el servidor que ejecute el comando)")
     .addIntegerOption(opt => opt.setName("userid").setDescription("UserId").setRequired(true))
     .addStringOption(opt => opt.setName("reason").setDescription("Razón").setRequired(false)),
