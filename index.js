@@ -1,21 +1,10 @@
 // ============================================================
-// SUBSPACE DISCORD CONTROL SERVER - ULTRA PRO EDITION
-// Production Ready - Railway Compatible
-// ============================================================
-// Features:
-// - Discord Bot
-// - Secure HTTP API
-// - x-api-key authentication
-// - Rate limiting (anti spam)
-// - Input validation
-// - Embed formatting (professional)
-// - Health endpoint
-// - Global error handling
-// - Clean architecture
+// SUBSPACE DISCORD CONTROL SERVER - FINAL PRO VERSION
+// No extra dependencies required
+// Railway Production Ready
 // ============================================================
 
 const express = require("express");
-const rateLimit = require("express-rate-limit");
 const {
   Client,
   GatewayIntentBits,
@@ -33,7 +22,7 @@ const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
 const API_KEY = process.env.API_KEY;
 const PORT = process.env.PORT || 8080;
 
-// ========= REQUIRED ENV VALIDATION =========
+// ================= ENV VALIDATION =================
 function must(name, value) {
   if (!value) {
     console.error(`❌ Missing environment variable: ${name}`);
@@ -56,70 +45,85 @@ let botReady = false;
 client.once(Events.ClientReady, async () => {
   botReady = true;
   console.log(`✅ Bot online as ${client.user.tag}`);
-  try {
-    await registerCommands();
-  } catch (err) {
-    console.error("❌ Slash registration error:", err);
-  }
+  await registerCommands();
 });
-
-// ================= SLASH COMMAND =================
-const commands = [
-  new SlashCommandBuilder()
-    .setName("ping")
-    .setDescription("Health check command")
-    .toJSON(),
-];
-
-async function registerCommands() {
-  const rest = new REST({ version: "10" }).setToken(TOKEN);
-  await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
-  console.log("🚀 Slash commands registered");
-}
 
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
-
   if (interaction.commandName === "ping") {
     await interaction.reply("🏓 Pong!");
   }
 });
 
+// ================= SLASH COMMAND =================
+async function registerCommands() {
+  const commands = [
+    new SlashCommandBuilder()
+      .setName("ping")
+      .setDescription("Health check command")
+      .toJSON(),
+  ];
+
+  const rest = new REST({ version: "10" }).setToken(TOKEN);
+  await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
+  console.log("🚀 Slash commands registered");
+}
+
 // ================= EXPRESS =================
 const app = express();
 app.use(express.json({ limit: "256kb" }));
 
-// ========== RATE LIMIT (Anti Spam) ==========
-const limiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 30, // 30 requests per minute
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// ================= SIMPLE INTERNAL RATE LIMIT =================
+// Sin librerías externas
+const rateStore = new Map();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minuto
+const RATE_LIMIT_MAX = 25; // 25 requests por minuto por IP
 
-app.use("/event", limiter);
+function rateLimit(req, res) {
+  const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+  const now = Date.now();
+
+  if (!rateStore.has(ip)) {
+    rateStore.set(ip, []);
+  }
+
+  const timestamps = rateStore.get(ip).filter(t => now - t < RATE_LIMIT_WINDOW);
+  timestamps.push(now);
+  rateStore.set(ip, timestamps);
+
+  if (timestamps.length > RATE_LIMIT_MAX) {
+    res.status(429).json({ ok: false, error: "Too many requests" });
+    return false;
+  }
+
+  return true;
+}
 
 // ================= SECURITY =================
 function requireApiKey(req, res) {
   const key = req.headers["x-api-key"];
   if (!key || key !== API_KEY) {
-    return res.status(401).json({ ok: false, error: "Unauthorized" });
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return false;
   }
   return true;
 }
 
 // ================= HEALTH =================
 app.get("/health", (req, res) => {
-  return res.status(200).json({
+  res.status(200).json({
     ok: true,
     botReady,
-    uptime: process.uptime(),
+    uptimeSeconds: Math.floor(process.uptime()),
   });
 });
 
-// ================= HELPER =================
+// ================= UTIL =================
 function sanitize(input) {
-  return String(input).replace(/@everyone|@here/g, "").trim();
+  return String(input)
+    .replace(/@everyone/g, "")
+    .replace(/@here/g, "")
+    .trim();
 }
 
 function colorByType(type) {
@@ -137,6 +141,7 @@ function colorByType(type) {
 app.post("/event", async (req, res) => {
   try {
     if (!requireApiKey(req, res)) return;
+    if (!rateLimit(req, res)) return;
 
     if (!botReady) {
       return res.status(503).json({ ok: false, error: "Bot not ready" });
@@ -180,7 +185,7 @@ app.post("/event", async (req, res) => {
   }
 });
 
-// ================= GLOBAL ERROR HANDLER =================
+// ================= GLOBAL ERROR HANDLING =================
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err);
 });
